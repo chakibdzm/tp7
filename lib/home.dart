@@ -1,24 +1,24 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+
 import 'package:torch_light/torch_light.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({Key? key}) : super(key: key);
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  _HomePageState createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   bool _isNear = false;
-  String _text = "Stop service";
+  bool _isFlashlightOn = false;
+
   @override
   void initState() {
     super.initState();
     // Listen to proximity sensor events
-    _shownotification();
     ProximitySensor.events.listen((int event) {
       setState(() {
         _isNear = event > 0; // 0 means far, 1 means near
@@ -26,28 +26,15 @@ class _HomePageState extends State<HomePage> {
       });
     });
   }
-void _shownotification() async {
-  final service = FlutterBackgroundService();
-  bool isRunning = await service.isRunning();
-  if (isRunning) {
-    service.invoke('stopService');
-  } else {
-    service.startService();
-  }
-  if (!isRunning) {
-    _text = "Stop Service";
-  } else {
-    _text = "Start Service";
-  }
-  setState(() {});
-}
 
   void _handleProximityChange() async {
     if (_isNear) {
       // Turn on the torch when near
       try {
-
         await TorchLight.enableTorch();
+        setState(() {
+          _isFlashlightOn = true;
+        });
       } on Exception catch (_) {
         // Handle error
       }
@@ -55,10 +42,48 @@ void _shownotification() async {
       // Turn off the torch when far
       try {
         await TorchLight.disableTorch();
+        setState(() {
+          _isFlashlightOn = false;
+        });
       } on Exception catch (_) {
         // Handle error
       }
     }
+  }
+
+  Future<void> _showFlashlightNotification() async {
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+    AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initializationSettings =
+    InitializationSettings(android: initializationSettingsAndroid);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings,);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      'Flashlight Control',
+      null,
+      _buildFlashlightNotification(),
+      payload: 'Flashlight Control',
+    );
+  }
+
+  NotificationDetails _buildFlashlightNotification() {
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+    AndroidNotificationDetails(
+      'flashlight_notification_channel',
+      'Flashlight Notification Channel',
+      channelDescription: 'Channel for flashlight control notification',
+      importance: Importance.max,
+      priority: Priority.high,
+      styleInformation: BigTextStyleInformation(''),
+      enableVibration: false,
+      onlyAlertOnce: true,
+      showWhen: false,
+      ongoing: true,
+    );
+    return NotificationDetails(android: androidPlatformChannelSpecifics);
   }
 
   @override
@@ -70,11 +95,14 @@ void _shownotification() async {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.only(left: 60, top: 50,right: 60),
+              padding: const EdgeInsets.only(left: 60, top: 50, right: 60),
               child: InkWell(
                 onTap: () async {
                   try {
                     await TorchLight.enableTorch();
+                    setState(() {
+                      _isFlashlightOn = true;
+                    });
                   } on Exception catch (_) {
                     // Handle error
                   }
@@ -100,12 +128,14 @@ void _shownotification() async {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 60, top: 50,right: 60),
+              padding: const EdgeInsets.only(left: 60, top: 50, right: 60),
               child: InkWell(
                 onTap: () async {
                   try {
-
                     await TorchLight.disableTorch();
+                    setState(() {
+                      _isFlashlightOn = false;
+                    });
                   } on Exception catch (_) {
                     // Handle error
                   }
@@ -130,13 +160,19 @@ void _shownotification() async {
                 ),
               ),
             ),
-            const SizedBox(height: 30,),
+            const SizedBox(
+              height: 30,
+            ),
             const Padding(
               padding: EdgeInsets.only(left: 20),
               child: Text(
                 "Cover Your Sensor to turn ON_OFF THE Lights",
                 style: TextStyle(fontSize: 20),
               ),
+            ),
+            ElevatedButton(
+              onPressed: _showFlashlightNotification,
+              child: Text('Show Flashlight Notification'),
             ),
           ],
         ),
